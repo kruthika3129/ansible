@@ -1,0 +1,78 @@
+1. Prepare Your Ubuntu Machine
+sudo apt update && sudo apt install openjdk-11-jdk maven git ansible -y
+2. Install Jenkins (if not already installed)
+# Add Jenkins key and repo
+curl -fsSL https://pkg.jenkins.io/debian/jenkins.io.key | sudo tee \
+/usr/share/keyrings/jenkins-keyring.asc > /dev/null
+echo deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] \ https://pkg.jenkins.io/debian binary/ | sudo tee \
+/etc/apt/sources.list.d/jenkins.list > /dev/null
+
+
+# Install Jenkins sudo apt update
+sudo apt install jenkins -y
+ 
+# Start Jenkins
+sudo systemctl start jenkins sudo systemctl enable jenkins
+•	Access Jenkins: http://localhost:8080
+•	Unlock using:
+sudo cat /var/lib/jenkins/secrets/initialAdminPassword
+•	Install suggested plugins and create your admin user.
+
+⬛ 3. Create a Maven Project (or use your GitHub project)
+If you don’t have one, create a sample using:
+mvn archetype:generate -DgroupId=com.example -DartifactId=my-app \
+-DarchetypeArtifactId=maven-archetype-quickstart -DinteractiveMode=false cd my-app
+git init
+git remote add origin https://github.com/yourusername/yourrepo.git git add .
+git commit -m "initial commit" git push -u origin master
+⬛   You must have this code in GitHub, because Jenkins will pull it from GitHub.
+
+4. Setup Jenkins Job to Build and Deploy
+1.	Jenkins Dashboard → New Item → Freestyle project
+2.	Name: maven-ansible-pipeline
+3.	Source Code Management: Select Git
+o	Repository URL: https://github.com/yourusername/yourrepo.git
+ 
+4.	Build Environment:
+o	Check Delete workspace before build starts (optional but clean)
+5.	Build Steps → Add build step → Invoke top-level Maven targets
+o	Goals: clean package
+6.	Post-Build Step (the actual link to Ansible):
+o	Add build step → Execute shell
+o	Paste:
+7.	echo "Deploying using Ansible..."
+8.	ansible-playbook -i /var/lib/Jenkins/ansi/hosts /var/lib/jenkins/ansi/deploy.yml
+
+⬛ 5. Setup Ansible Files (Linked to Jenkins) Create this folder on your Ubuntu machine: mkdir ansi
+cd ansi
+🗂 Inventory file: hosts nano hosts
+[app_servers]
+localhost ansible_connection=local
+ ¸ˆ   Playbook: deploy.yml
+nano deploy.yml
+---
+-	name: Deploy Maven Artifact hosts: app_servers
+tasks:
+-	name: Copy JAR from Jenkins workspace to /opt/myapp/ copy:
+ 
+src: /var/lib/jenkins/workspace/maven-ansible-pipeline/target/my-app-1.0-SNAPSHOT.jar dest: /opt/myapp/my-app.jar
+mode: '0755'
+
+
+-	name: (Optional) Restart service if needed systemd:
+name: myapp state: restarted
+ignore_errors: true
+Note: Update the .jar name if different in your project. Create destination dir:
+sudo mkdir -p /opt/myapp
+sudo chown jenkins:jenkins /opt/myapp
+
+
+in normal home directry: (copy and paste ansi folder to /var/lib/Jenkins/ansi sudo cp -r /home/chint/ansi /var/lib/jenkins/ansi
+sudo chown -R jenkins:jenkins /var/lib/jenkins/ansi
+
+
+•	Go to Jenkins Dashboard → your job → click Build Now
+•	It will:
+o	Clone GitHub code
+o	Build with Maven
+o	Run Ansible to copy the .jar and deploy
